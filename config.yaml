@@ -1,0 +1,20 @@
+db_path: "../../jjajang/data/naver/research.db3"
+
+ollama_model: "qwen3.5:latest"
+
+ollama_cloud_model_0: "qwen3.5:cloud"
+ollama_cloud_model_1: "nemotron-3-super:cloud"
+ollama_cloud_model_2: "qwen3-coder-next:cloud"
+ollama_cloud_model_3: "minimax-m2.7:cloud"
+ollama_cloud_model_4: "gpt-oss-120b:cloud"
+
+openrouter_model: "nvidia/nemotron-3-super-120b-a12b:free"
+openrouter_model_2: "minimax/minimax-m2.5:free"
+openrouter_model_3: "openai/gpt-oss-120b:free"
+openrouter_model_4: "qwen/qwen3-coder:free"
+
+query_limits:
+  company: 5
+  market_info: 5
+  invest: 5
+  default: 5

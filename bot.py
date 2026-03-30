@@ -7,11 +7,11 @@ from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
 
-from graph.workflow import app
-
-# 환경 변수 로드
+# 환경 변수 로드 (내부 모듈 임포트 전 실행)
 load_dotenv()
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+
+from graph.workflow import app  # noqa: E402
 
 # 인텐트 설정
 intents = discord.Intents.default()

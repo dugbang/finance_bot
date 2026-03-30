@@ -2,10 +2,16 @@ import logging
 import time
 from typing import Literal
 
-from langchain_ollama import ChatOllama
+import yaml
+from dotenv import load_dotenv
 
-from graph.state import GraphState
-from tools import get_market_trends, search_company_reports
+from graph.llm import llm_manager
+
+# 환경 변수 로드
+load_dotenv()
+
+from graph.state import GraphState  # noqa: E402
+from tools import get_market_trends, search_company_reports  # noqa: E402
 
 # 로깅 설정
 logger = logging.getLogger("finance_bot.nodes")
@@ -13,16 +19,23 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
-# ChatOllama 설정
-llm = ChatOllama(
-    model="minimax-m2.7:cloud",
-    base_url="http://localhost:11434",
-    temperature=0.1,
-    num_ctx=4096,  # 컨텍스트 창 명시적 설정
-)
+
+# 설정 로드
+def load_config() -> dict:
+    try:
+        with open("config.yaml", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    except Exception:
+        return {}
 
 
-def truncate_text(text: str, max_length: int = 1500) -> str:
+config = load_config()
+llm_cfg = config.get("llm_config", {})
+
+# 기존 전역 LLM 인스턴스 획득 방식 제거 (노드별 획득으로 변경)
+
+
+def truncate_text(text: str, max_length: int = 10000) -> str:
     """텍스트가 너무 길 경우 절단하고 말줄임표를 추가합니다."""
     if len(text) <= max_length:
         return text
@@ -41,16 +54,14 @@ async def analyze_market(state: GraphState) -> GraphState:
         if not retrieved_data:
             data_str = "조회된 최근 시황 데이터가 없습니다."
         else:
-            # 개별 항목 요약 절단 및 전체 데이터 양 제한 (최신 순 5개만 사용 권장)
+            # 개별 항목 요약 절단 및 전체 데이터 양 제한 (최신 순 10개로 확장)
             items = []
-            for item in retrieved_data[:7]:  # 최근 7개 항목으로 제한
+            for item in retrieved_data[:10]:  # 최근 10개 항목으로 제한
                 items.append(
-                    f"[{item.get('등록일')}] {item.get('제목')}: {truncate_text(str(item.get('요약', '')))}"
+                    f"[{item.get('등록일')}] {item.get('제목')}: {truncate_text(str(item.get('요약', '')), 3000)}"
                 )
             data_str = "\n".join(items)
-            data_str = truncate_text(
-                data_str, 3000
-            )  # 전체 시장 분석 데이터 3000자 제한
+            data_str = truncate_text(data_str, llm_cfg.get("max_length_market", 20000))
 
     except Exception as e:
         logger.error(f"Error in analyze_market data retrieval: {str(e)}")
@@ -67,6 +78,10 @@ async def analyze_market(state: GraphState) -> GraphState:
     [데이터]
     {data_str}
     """
+
+    # 해당 노드 전용 LLM 획득
+    llm = llm_manager.get_model("market_analysis_model")
+    logger.info(f"Using model: {getattr(llm, 'model', 'unknown')} for market analysis")
 
     try:
         response = await llm.ainvoke(prompt)
@@ -88,6 +103,10 @@ async def analyze_stocks(state: GraphState) -> GraphState:
     user_query = state.get("user_query", "")
     current_retry = state.get("retry_count", 0)
     logger.info(f"Entering analyze_stocks node (retry: {current_retry})")
+
+    # 해당 노드 전용 LLM 획득
+    llm = llm_manager.get_model("stock_analysis_model")
+    logger.info(f"Using model: {getattr(llm, 'model', 'unknown')} for stock analysis")
 
     # 1. 사용자 질문에서 종목명 추출
     company_name = state.get("company_name", "")
@@ -116,10 +135,10 @@ async def analyze_stocks(state: GraphState) -> GraphState:
         }
 
     # 4. 데이터가 있는 경우 상세 분석
-    # reports는 List[Dict]이므로 요약 정보만 추출하여 길이를 제한함
+    # reports는 List[Dict]이므로 요약 정보만 추출하여 길이를 확장함
     formatted_reports = []
-    for r in reports[:2]:  # 가장 관련성 높은 리포트 2개만 사용
-        content = f"제목: {r.get('제목')}\n증권사: {r.get('증권사')}\n요약: {truncate_text(str(r.get('요약', '')), 2000)}"
+    for r in reports[:5]:  # 관련 리포트 개수를 5개로 확장
+        content = f"제목: {r.get('제목')}\n증권사: {r.get('증권사')}\n요약: {truncate_text(str(r.get('요약', '')), 5000)}"
         formatted_reports.append(content)
 
     data_str = "\n---\n".join(formatted_reports)
@@ -186,10 +205,10 @@ async def finalize_report(state: GraphState) -> GraphState:
     데이터에 없는 정보는 절대로 생성하지 마세요 (할루시네이션 방지).
 
     [시장 분석]
-    {truncate_text(market_summary, 1500)}
+    {truncate_text(market_summary, llm_cfg.get("max_length_market", 10000))}
 
     [종목 분석]
-    {truncate_text(stock_info_str, 2000)}
+    {truncate_text(stock_info_str, llm_cfg.get("max_length_stock", 15000))}
 
     [출력 형식]
     ## 📈 {company_name} 투자 보고서
@@ -202,7 +221,14 @@ async def finalize_report(state: GraphState) -> GraphState:
     > ⚠️ 면책 조항: 본 내용은 참고용이며, 모든 투자 책임은 사용자에게 있습니다.
     """
 
+    # 해당 노드 전용 LLM 획득
+    llm = llm_manager.get_model("report_generation_model")
+    logger.info(
+        f"Using model: {getattr(llm, 'model', 'unknown')} for report generation"
+    )
+
     try:
+        # 설정에 따라 지정된 모델 사용
         response = await llm.ainvoke(prompt)
         final_report = response.content
         if "면책 조항" not in final_report:

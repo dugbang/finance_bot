@@ -1,18 +1,18 @@
 db_path: "../../jjajang/data/naver/research.db3"
 
-# 신규 모델 설정 섹션
+# 신규 모델 설정 섹션, ollama local 모델은 websearch 기능에 사용한다.
 models:
-  qwen_server:
+  qwen_local:
     provider: "ollama"
     name: "qwen3.5:latest"
     base_url: "http://192.168.0.10:11434"
-    num_ctx: 65536
-  gpt_oss_server:
+    num_ctx: 131072  # 서버 상황에 따라 64K, 128K 동적으로 설정됨. 기본은 128K
+  gpt_oss_local:
     provider: "ollama"
     name: "gpt-oss:latest"
     base_url: "http://192.168.0.10:11434"
     num_ctx: 131072
-  qwen_coder_server:
+  qwen_coder_local:
     provider: "ollama"
     name: "qwen3-coder:latest"
     base_url: "http://192.168.0.10:11434"
@@ -58,10 +58,10 @@ llm_config:
   max_length_market: 20000
   max_length_stock: 15000
 
-  # 노드별 전용 모델 매핑 (models 섹션의 키를 참조), qwen_coder_next_cloud
+  # 노드별 전용 모델 매핑 (models 섹션의 키를 참조), qwen_coder_next_cloud, nemotron_cloud
   # market_analysis_model: "qwen_cloud"      # 시장 트렌드 분석용
   # stock_analysis_model: "minimax_cloud"     # 종목 리포트 분석용
   # report_generation_model: "gpt_oss_cloud"  # 최종 투자 보고서 생성용
-  market_analysis_model: "gpt_oss_cloud"      # 시장 트렌드 분석용
-  stock_analysis_model: "gpt_oss_cloud"     # 종목 리포트 분석용
-  report_generation_model: "gpt_oss_cloud"  # 최종 투자 보고서 생성용
+  market_analysis_model: "nemotron_cloud"      # 시장 트렌드 분석용
+  stock_analysis_model: "nemotron_cloud"     # 종목 리포트 분석용
+  report_generation_model: "nemotron_cloud"  # 최종 투자 보고서 생성용
